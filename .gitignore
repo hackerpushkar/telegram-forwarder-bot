@@ -1,0 +1,61 @@
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+*.env
+!.env.example
+
+# ==========================================
+# Application Data & Databases
+# ==========================================
+data/*
+!data/.gitkeep
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# Telegram / Telethon Sessions
+# ==========================================
+*.session
+*.session-journal
+
+# ==========================================
+# Python Bytecode & Cache
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+*.log
+logs/
+temp/
+tmp/
+
+# ==========================================
+# IDE & OS Specific
+# ==========================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

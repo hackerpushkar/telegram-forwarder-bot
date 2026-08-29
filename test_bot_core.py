@@ -68,6 +68,11 @@ class TestForwarderCore(unittest.IsolatedAsyncioTestCase):
         cfg_str = config.__class__(BOT_TOKEN="fake", ADMIN_IDS="6367495275, 111222333")
         self.assertEqual(cfg_str.ADMIN_IDS, [6367495275, 111222333])
 
+        # Test MongoDB Config
+        cfg_mongo = config.__class__(BOT_TOKEN="fake", MONGO_URI="mongodb+srv://user:pass@cluster.mongodb.net/testdb")
+        self.assertEqual(cfg_mongo.MONGO_URI, "mongodb+srv://user:pass@cluster.mongodb.net/testdb")
+        self.assertEqual(cfg_mongo.MONGO_DB_NAME, "forwarder_bot")
+
     async def test_database_crud(self):
         # 1. Create Route in Bot Mode
         route_id = await RouteManager.create_route(

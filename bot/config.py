@@ -15,6 +15,8 @@ class BotConfig(BaseSettings):
     USERBOT_SESSION_NAME: str = "data/userbot"
     
     DB_PATH: str = "data/forwarder.db"
+    MONGO_URI: Optional[str] = None
+    MONGO_DB_NAME: str = "forwarder_bot"
     ADMINS_ONLY: bool = True
     DEFAULT_FORWARD_MODE: str = "copy"  # "copy" or "forward"
     MAX_RETRIES: int = 5

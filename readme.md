@@ -80,8 +80,10 @@ BOT_TOKEN=123456789:ABCDefGhIJKlmNoPQRsTUVwxyZ
 # Telegram User IDs of administrators allowed to configure the bot (comma-separated)
 ADMIN_IDS=123456789,987654321
 
-# Database file location
+# Database (Leave MONGO_URI empty for SQLite, or provide your MongoDB Atlas/local URI)
 DB_PATH=data/forwarder.db
+MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/?retryWrites=true&w=majority
+MONGO_DB_NAME=forwarder_bot
 
 # Restrict bot management to ADMIN_IDS (true/false)
 ADMINS_ONLY=true
