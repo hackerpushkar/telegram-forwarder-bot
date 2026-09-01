@@ -11,8 +11,16 @@ from bot.keyboards.inline import (
     get_route_details_kb
 )
 from bot.database.models import RouteManager
+from bot.config import config
 
 router = Router(name="settings_router")
+
+def can_access_route(route: Optional[dict], user_id: Optional[int]) -> bool:
+    if not route or user_id is None:
+        return False
+    if route.get("user_id") == user_id:
+        return True
+    return config.is_admin(user_id)
 
 class HeaderFooterState(StatesGroup):
     route_id = State()
@@ -40,10 +48,11 @@ async def cb_route_filters(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
 
     route = await RouteManager.get_route(route_id)
-    if not route:
-        await callback.answer("Route not found!", show_alert=True)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
         return
 
     filters = await RouteManager.get_filters(route_id)
@@ -67,9 +76,16 @@ async def cb_filter_toggle(callback: CallbackQuery):
     route_id = int(parts[2])
     column = parts[3]
     page = int(parts[4]) if len(parts) > 4 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     await RouteManager.toggle_filter_option(route_id, column)
     filters = await RouteManager.get_filters(route_id)
+
 
     text = f"""
 🎯 <b>Media & Content Filters for Route #{route_id}</b>
@@ -92,10 +108,11 @@ async def cb_route_custom(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
 
     route = await RouteManager.get_route(route_id)
-    if not route:
-        await callback.answer("Route not found!", show_alert=True)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
         return
 
     customs = await RouteManager.get_customizations(route_id) or {}
@@ -129,6 +146,12 @@ async def cb_custom_toggle(callback: CallbackQuery):
     route_id = int(parts[2])
     field = parts[3]
     page = int(parts[4]) if len(parts) > 4 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     customs = await RouteManager.get_customizations(route_id) or {}
     curr_val = customs.get(field, 0)
@@ -150,6 +173,12 @@ async def cb_set_header_footer(callback: CallbackQuery, state: FSMContext):
     target = "header" if "header" in parts[0] else "footer"
     route_id = int(parts[1])
     page = int(parts[2]) if len(parts) > 2 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     await state.set_state(HeaderFooterState.text)
     await state.update_data(route_id=route_id, page=page, target=target)
@@ -175,6 +204,13 @@ async def process_header_footer_text(message: Message, state: FSMContext):
     route_id = data["route_id"]
     page = data["page"]
     target = data["target"]
+    user_id = message.from_user.id if message.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await message.answer("⛔ Access Denied: You do not have permission to modify this route.")
+        await state.clear()
+        return
 
     raw_text = message.text or ""
     final_text = "" if raw_text.strip().lower() in ["clear", "none", "remove"] else raw_text.strip()
@@ -203,6 +239,12 @@ async def cb_keywords_menu(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     await state.set_state(KeywordsState.keywords)
     await state.update_data(route_id=route_id, page=page)
@@ -233,6 +275,14 @@ async def process_keywords(message: Message, state: FSMContext):
     data = await state.get_data()
     route_id = data["route_id"]
     page = data["page"]
+    user_id = message.from_user.id if message.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await message.answer("⛔ Access Denied: You do not have permission to modify this route.")
+        await state.clear()
+        return
+
     raw_text = message.text.strip() if message.text else ""
 
     if raw_text.lower() in ["clear", "clear all", "none"]:
@@ -265,6 +315,12 @@ async def cb_replacements_menu(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     replacements = await RouteManager.get_replacements(route_id)
     text = f"""
@@ -286,6 +342,12 @@ async def cb_rep_delete(callback: CallbackQuery):
     rep_id = int(parts[2])
     route_id = int(parts[3])
     page = int(parts[4]) if len(parts) > 4 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     await RouteManager.delete_replacement(rep_id)
     await callback.answer("Replacement removed! 🗑️")
@@ -308,6 +370,12 @@ async def cb_rep_add(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     await state.set_state(AddReplacementState.find_text)
     await state.update_data(route_id=route_id, page=page)
@@ -354,6 +422,13 @@ async def process_rep_replace(message: Message, state: FSMContext):
     route_id = data["route_id"]
     page = data["page"]
     find_text = data["find_text"]
+    user_id = message.from_user.id if message.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await message.answer("⛔ Access Denied: You do not have permission to modify this route.")
+        await state.clear()
+        return
 
     await RouteManager.add_replacement(route_id, find_text=find_text, replace_text=replace_text)
     await state.clear()
@@ -368,3 +443,4 @@ async def process_rep_replace(message: Message, state: FSMContext):
         text="Replacements List:",
         reply_markup=get_replacements_kb(replacements, route_id=route_id, page=page)
     )
+

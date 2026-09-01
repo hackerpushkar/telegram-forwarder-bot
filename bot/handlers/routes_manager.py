@@ -11,12 +11,21 @@ from bot.keyboards.inline import (
     get_confirm_delete_kb,
     get_forward_mode_kb,
     get_cancel_kb,
-    get_main_menu_kb
+    get_main_menu_kb,
+    get_empty_routes_kb
 )
 from bot.database.models import RouteManager
 from bot.services.userbot import userbot_manager
+from bot.config import config
 
 router = Router(name="routes_manager_router")
+
+def can_access_route(route: Optional[dict], user_id: Optional[int]) -> bool:
+    if not route or user_id is None:
+        return False
+    if route.get("user_id") == user_id:
+        return True
+    return config.is_admin(user_id)
 
 class RouteWizardState(StatesGroup):
     name = State()
@@ -65,9 +74,8 @@ async def resolve_chat_input(bot, text: Optional[str], message: Message) -> Tupl
 @router.message(Command("routes"))
 @router.message(Command("list"))
 async def cmd_routes(message: Message):
-    routes = await RouteManager.get_routes_by_user(message.from_user.id)
-    if not routes:
-        routes = await RouteManager.get_all_routes()
+    user_id = message.from_user.id if message.from_user else 0
+    routes = await RouteManager.get_routes_by_user(user_id)
 
     if not routes:
         await message.answer(
@@ -75,7 +83,7 @@ async def cmd_routes(message: Message):
             "You haven't set up any forward routes yet.\n"
             "Click <b>'➕ Add New Route'</b> to create your first one.",
             parse_mode="HTML",
-            reply_markup=get_main_menu_kb(message.from_user.id)
+            reply_markup=get_empty_routes_kb()
         )
         return
 
@@ -89,19 +97,19 @@ async def cmd_routes(message: Message):
 @router.callback_query(F.data.startswith("routes:list:"))
 async def cb_routes_list(callback: CallbackQuery):
     page = int(callback.data.split(":")[2])
-    routes = await RouteManager.get_routes_by_user(callback.from_user.id)
-    if not routes:
-        routes = await RouteManager.get_all_routes()
+    user_id = callback.from_user.id if callback.from_user else 0
+    routes = await RouteManager.get_routes_by_user(user_id)
 
     if not routes:
         await callback.message.edit_text(
             "📭 <b>No Forwarding Routes Found!</b>\n\n"
             "Click <b>'➕ Add New Route'</b> to create your first route.",
             parse_mode="HTML",
-            reply_markup=get_main_menu_kb(callback.from_user.id)
+            reply_markup=get_empty_routes_kb()
         )
         await callback.answer()
         return
+
 
     await callback.message.edit_text(
         f"📋 <b>Your Forwarding Routes ({len(routes)} Total)</b>\n\n"
@@ -118,10 +126,11 @@ async def cb_route_view(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
 
     route = await RouteManager.get_route(route_id)
-    if not route:
-        await callback.answer("❌ Route not found!", show_alert=True)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: Route not found or you do not have permission.", show_alert=True)
         return
 
     status_badge = "🟢 <b>ACTIVE</b>" if route["is_active"] else "🔴 <b>PAUSED</b>"
@@ -161,6 +170,12 @@ async def cb_route_toggle(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
     new_state = await RouteManager.toggle_route_active(route_id)
     state_str = "Resumed 🟢" if new_state else "Paused 🔴"
@@ -174,14 +189,17 @@ async def cb_route_mode(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
 
     route = await RouteManager.get_route(route_id)
-    if route:
-        new_mode = "forward" if route.get("forward_mode") == "copy" else "copy"
-        await RouteManager.update_forward_mode(route_id, new_mode)
-        mode_label = "Clean Copy 📋" if new_mode == "copy" else "Native Forward ⏩"
-        await callback.answer(f"Switched mode to {mode_label}")
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot modify this route.", show_alert=True)
+        return
 
+    new_mode = "forward" if route.get("forward_mode") == "copy" else "copy"
+    await RouteManager.update_forward_mode(route_id, new_mode)
+    mode_label = "Clean Copy 📋" if new_mode == "copy" else "Native Forward ⏩"
+    await callback.answer(f"Switched mode to {mode_label}")
     await cb_route_view(callback)
 
 # --- Delete Route ---
@@ -191,10 +209,11 @@ async def cb_route_delete_confirm(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
 
     route = await RouteManager.get_route(route_id)
-    if not route:
-        await callback.answer("Route not found!", show_alert=True)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot delete this route.", show_alert=True)
         return
 
     text = f"⚠️ <b>Are you sure you want to delete route '{route['name']}'?</b>\n\nThis will remove all associated filters and settings permanently."
@@ -210,6 +229,12 @@ async def cb_route_delete_do(callback: CallbackQuery):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot delete this route.", show_alert=True)
+        return
 
     await RouteManager.delete_route(route_id)
     await callback.answer("Route deleted successfully! 🗑️", show_alert=True)
@@ -222,6 +247,12 @@ async def cb_route_rename(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split(":")
     route_id = int(parts[2])
     page = int(parts[3]) if len(parts) > 3 else 0
+    user_id = callback.from_user.id if callback.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await callback.answer("⛔ Access Denied: You cannot rename this route.", show_alert=True)
+        return
 
     await state.set_state(RenameRouteState.new_name)
     await state.update_data(route_id=route_id, page=page)
@@ -243,11 +274,19 @@ async def process_rename_route(message: Message, state: FSMContext):
     data = await state.get_data()
     route_id = data["route_id"]
     page = data["page"]
+    user_id = message.from_user.id if message.from_user else 0
+
+    route = await RouteManager.get_route(route_id)
+    if not route or not can_access_route(route, user_id):
+        await message.answer("⛔ Access Denied: You do not have permission to rename this route.")
+        await state.clear()
+        return
 
     await RouteManager.update_route_name(route_id, new_name)
     await state.clear()
 
     route = await RouteManager.get_route(route_id)
+
     await message.answer(f"✅ Route renamed to <b>{new_name}</b>!", parse_mode="HTML")
     await message.answer(
         text="Route details:",

@@ -26,10 +26,8 @@ def get_main_menu_kb(user_id: Optional[int] = None) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📖 User Guide & Help", callback_data="menu:help")
         )
 
-    builder.row(
-        InlineKeyboardButton(text="🔄 Refresh Dashboard", callback_data="menu:home")
-    )
     return builder.as_markup()
+
 
 def get_userbot_status_kb(is_connected: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
@@ -47,7 +45,57 @@ def get_userbot_status_kb(is_connected: bool) -> InlineKeyboardMarkup:
     )
     return builder.as_markup()
 
+def get_empty_routes_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="➕ Add New Route", callback_data="wizard:start")
+    )
+    builder.row(
+        InlineKeyboardButton(text="🏠 Back to Main Menu", callback_data="menu:home")
+    )
+    return builder.as_markup()
+
+def get_help_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="➕ Add New Route", callback_data="wizard:start")
+    )
+    builder.row(
+        InlineKeyboardButton(text="👨‍💻 Developer Info", callback_data="menu:dev_info")
+    )
+    builder.row(
+        InlineKeyboardButton(text="🏠 Back to Main Menu", callback_data="menu:home")
+    )
+    return builder.as_markup()
+
+def get_dev_info_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="🚀 Make Your Own Bot",
+            url="https://app.qufork.com/templates?template=tpl_1788018445033_telegram_forwarder_b"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(text="📖 Back to User Guide", callback_data="menu:help"),
+        InlineKeyboardButton(text="🏠 Back to Main Menu", callback_data="menu:home")
+    )
+    return builder.as_markup()
+
+def get_stats_kb() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="➕ Add New Route", callback_data="wizard:start"),
+        InlineKeyboardButton(text="🔄 Refresh Stats", callback_data="menu:stats")
+    )
+    builder.row(
+        InlineKeyboardButton(text="🏠 Back to Main Menu", callback_data="menu:home")
+    )
+    return builder.as_markup()
+
+
 def get_routes_list_kb(routes: List[Dict[str, Any]], page: int = 0, page_size: int = 5) -> InlineKeyboardMarkup:
+
     builder = InlineKeyboardBuilder()
     start_idx = page * page_size
     end_idx = start_idx + page_size
@@ -217,3 +265,27 @@ def get_skip_cancel_kb(action_prefix: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="❌ Cancel", callback_data="wizard:cancel")
     )
     return builder.as_markup()
+
+def get_force_sub_kb(unjoined_channels: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
+    """
+    Builds the inline keyboard for Force Subscribe screen.
+    Includes direct join links for all unjoined channels and a final verification button.
+    """
+    builder = InlineKeyboardBuilder()
+
+    for idx, ch in enumerate(unjoined_channels, 1):
+        btn_text = ch.get("title") or f"📢 Join Channel {idx}"
+        url = ch.get("url")
+        if url:
+            builder.row(InlineKeyboardButton(text=f"👉 Join {btn_text}", url=url))
+        else:
+            # Fallback if only chat_id is present
+            chat_id = ch.get("chat_id")
+            builder.row(InlineKeyboardButton(text=f"👉 Channel {idx} ({chat_id})", callback_data="fsub:verify"))
+
+    # The last button to verify joining
+    builder.row(
+        InlineKeyboardButton(text="🔄 I Have Joined (Verify)", callback_data="fsub:verify")
+    )
+    return builder.as_markup()
+

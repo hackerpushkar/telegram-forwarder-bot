@@ -11,9 +11,14 @@ os.environ["ADMIN_IDS"] = "123456789,987654321"
 os.environ["API_ID"] = "123456"
 os.environ["API_HASH"] = "abcdef123456"
 
-from bot.config import config, load_config
-# Reload config with updated DB path
-config = load_config()
+from bot.config import config
+
+config.DB_PATH = TEST_DB_PATH
+config.ADMIN_IDS = [123456789, 987654321]
+config.API_ID = 123456
+config.API_HASH = "abcdef123456"
+
+
 
 from bot.database.db import init_db, get_db
 from bot.database.models import RouteManager, StatsManager, UserbotAuthManager
@@ -40,6 +45,9 @@ class TestForwarderCore(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
         Path("data").mkdir(parents=True, exist_ok=True)
+        config.ADMIN_IDS = [123456789, 987654321]
+
+
 
     async def asyncSetUp(self):
         await init_db()
@@ -242,6 +250,122 @@ class TestForwarderCore(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(router)
         self.assertTrue(len(router.sub_routers) >= 5)
 
+    def test_main_menu_kb_admin_vs_normal_user(self):
+        from bot.keyboards.inline import get_main_menu_kb
+
+        admin_id = 123456789
+        normal_user_id = 999999999
+
+        # Admin keyboard
+        admin_kb = get_main_menu_kb(admin_id)
+        admin_btn_texts = [btn.text for row in admin_kb.inline_keyboard for btn in row]
+        self.assertTrue(any("Host Userbot Setup" in t for t in admin_btn_texts))
+
+        # Normal user keyboard
+        normal_kb = get_main_menu_kb(normal_user_id)
+        normal_btn_texts = [btn.text for row in normal_kb.inline_keyboard for btn in row]
+        self.assertFalse(any("Host Userbot Setup" in t for t in normal_btn_texts))
+        self.assertTrue(any("User Guide" in t for t in normal_btn_texts))
+
+        # Anonymous / None user keyboard
+        anon_kb = get_main_menu_kb(None)
+        anon_btn_texts = [btn.text for row in anon_kb.inline_keyboard for btn in row]
+        self.assertFalse(any("Host Userbot Setup" in t for t in anon_btn_texts))
+
+    async def test_route_user_isolation(self):
+        from bot.handlers.routes_manager import can_access_route
+
+        user_a = 777111
+        user_b = 888222
+        admin_id = 123456789
+
+        # User A creates a route
+        route_a_id = await RouteManager.create_route(
+            user_id=user_a,
+            name="User A Private Route",
+            source_chat_id=-100777111222,
+            source_chat_title="User A Source",
+            source_chat_type="channel",
+            dest_chat_id=-100777333444,
+            dest_chat_title="User A Dest",
+            dest_chat_type="channel",
+            forward_mode="copy"
+        )
+        route_a = await RouteManager.get_route(route_a_id)
+
+        # 1. User A sees their own route
+        routes_a = await RouteManager.get_routes_by_user(user_a)
+        self.assertTrue(any(r["id"] == route_a_id for r in routes_a))
+
+        # 2. User B has NO routes and CANNOT see User A's route
+        routes_b = await RouteManager.get_routes_by_user(user_b)
+        self.assertFalse(any(r["id"] == route_a_id for r in routes_b))
+        self.assertEqual(len(routes_b), 0)
+
+        # 3. Access permission checks
+        self.assertTrue(can_access_route(route_a, user_a))
+        self.assertFalse(can_access_route(route_a, user_b))
+        self.assertTrue(can_access_route(route_a, admin_id))
+
+    def test_empty_routes_kb(self):
+        from bot.keyboards.inline import get_empty_routes_kb
+
+        kb = get_empty_routes_kb()
+        btn_texts = [btn.text for row in kb.inline_keyboard for btn in row]
+        btn_callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+
+        self.assertEqual(len(btn_texts), 2)
+        self.assertIn("➕ Add New Route", btn_texts)
+        self.assertIn("🏠 Back to Main Menu", btn_texts)
+        self.assertIn("wizard:start", btn_callbacks)
+        self.assertIn("menu:home", btn_callbacks)
+
+    def test_help_and_stats_kb(self):
+        from bot.keyboards.inline import get_help_kb, get_stats_kb, get_dev_info_kb
+
+        # Help keyboard (now 3 buttons: Add Route, Developer Info, Main Menu)
+        help_kb = get_help_kb()
+        help_btn_texts = [btn.text for row in help_kb.inline_keyboard for btn in row]
+        help_btn_callbacks = [btn.callback_data for row in help_kb.inline_keyboard for btn in row]
+        self.assertEqual(len(help_btn_texts), 3)
+        self.assertEqual(help_btn_texts[0], "➕ Add New Route")
+        self.assertEqual(help_btn_texts[1], "👨‍💻 Developer Info")
+        self.assertEqual(help_btn_texts[2], "🏠 Back to Main Menu")
+        self.assertEqual(help_btn_callbacks[0], "wizard:start")
+        self.assertEqual(help_btn_callbacks[1], "menu:dev_info")
+        self.assertEqual(help_btn_callbacks[2], "menu:home")
+
+        # Developer Info keyboard (Row 1: Make Your Own Bot URL, Row 2: Back to User Guide & Back to Main Menu)
+        dev_kb = get_dev_info_kb()
+        self.assertEqual(len(dev_kb.inline_keyboard), 2)
+        # Row 1
+        self.assertEqual(len(dev_kb.inline_keyboard[0]), 1)
+        self.assertIn("Make Your Own Bot", dev_kb.inline_keyboard[0][0].text)
+        self.assertEqual(dev_kb.inline_keyboard[0][0].url, "https://app.qufork.com/templates?template=tpl_1788018445033_telegram_forwarder_b")
+        # Row 2 (2 buttons in same line)
+        self.assertEqual(len(dev_kb.inline_keyboard[1]), 2)
+        self.assertIn("Back to User Guide", dev_kb.inline_keyboard[1][0].text)
+        self.assertEqual(dev_kb.inline_keyboard[1][0].callback_data, "menu:help")
+        self.assertIn("Back to Main Menu", dev_kb.inline_keyboard[1][1].text)
+        self.assertEqual(dev_kb.inline_keyboard[1][1].callback_data, "menu:home")
+
+        # Stats keyboard
+        stats_kb = get_stats_kb()
+        stats_btn_texts = [btn.text for row in stats_kb.inline_keyboard for btn in row]
+        stats_btn_callbacks = [btn.callback_data for row in stats_kb.inline_keyboard for btn in row]
+        self.assertEqual(len(stats_btn_texts), 3)
+        self.assertIn("➕ Add New Route", stats_btn_texts)
+        self.assertIn("🔄 Refresh Stats", stats_btn_texts)
+        self.assertIn("🏠 Back to Main Menu", stats_btn_texts)
+        self.assertNotIn("Live Stats", stats_btn_texts)
+        self.assertIn("wizard:start", stats_btn_callbacks)
+        self.assertIn("menu:stats", stats_btn_callbacks)
+        self.assertIn("menu:home", stats_btn_callbacks)
+
 if __name__ == "__main__":
     unittest.main()
+
+
+
+
 

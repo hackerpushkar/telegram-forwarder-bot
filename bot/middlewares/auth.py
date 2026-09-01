@@ -20,7 +20,7 @@ class AuthMiddleware(BaseMiddleware):
 
         # If it's a private chat interaction, check authorization
         if user_id is not None:
-            if not config.is_admin(user_id):
+            if not config.is_authorized(user_id):
                 if isinstance(event, Message):
                     await event.answer(
                         "⛔ <b>Access Denied</b>\n\n"
