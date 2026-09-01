@@ -81,6 +81,12 @@ class TestForwarderCore(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cfg_mongo.MONGO_URI, "mongodb+srv://user:pass@cluster.mongodb.net/testdb")
         self.assertEqual(cfg_mongo.MONGO_DB_NAME, "forwarder_bot")
 
+        # Test ADMINS_ONLY boolean parsing with trailing/leading spaces
+        cfg_bool_f = config.__class__(BOT_TOKEN="fake", ADMINS_ONLY="false ")
+        self.assertFalse(cfg_bool_f.ADMINS_ONLY)
+        cfg_bool_t = config.__class__(BOT_TOKEN="fake", ADMINS_ONLY=" true")
+        self.assertTrue(cfg_bool_t.ADMINS_ONLY)
+
     async def test_database_crud(self):
         # 1. Create Route in Bot Mode
         route_id = await RouteManager.create_route(

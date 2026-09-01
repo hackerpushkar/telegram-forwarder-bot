@@ -112,6 +112,21 @@ class BotConfig(BaseSettings):
             return result
         return []
 
+    @field_validator("ADMINS_ONLY", mode="before")
+    @classmethod
+    def parse_admins_only(cls, v) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+        if isinstance(v, str):
+            clean = v.strip().lower()
+            if clean in ("true", "1", "yes", "on", "t", "y"):
+                return True
+            if clean in ("false", "0", "no", "off", "f", "n", ""):
+                return False
+        return bool(v)
+
     @field_validator("API_ID", mode="before")
     @classmethod
     def parse_api_id(cls, v) -> int:
